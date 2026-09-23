@@ -17,7 +17,7 @@ MieMie Worldbook Manager is an advanced management frontend for SillyTavern's na
 
 The project is designed for compatibility with SillyTavern's native World Info / Lorebook. It does not define a proprietary MieMie worldbook format. This initial repository contains no working implementation yet.
 
-正式产品与开发企划书将在原文提供后补入 `docs/PRODUCT_PLAN.md`；当前仅预留 `docs/` 目录。
+正式开发需求基线见 [产品与开发企划书 v0.1](docs/PRODUCT_PLAN.md)。参与社区协作前请阅读 [贡献说明](CONTRIBUTING.md)。
 
 ## 授权 / Licensing
 
