@@ -1,0 +1,49 @@
+# Dependencies and generated output
+node_modules/
+build/
+test-results/
+.DS_Store
+*.log
+
+# Local credentials; keep deliberately named configuration examples
+.npmrc
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.*.sample
+!.env.template
+!.env.*.template
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+
+# Network captures and cookie exports, not application source files
+*.har
+cookies.txt
+cookies.json
+cookies.sqlite
+cookie-jar.txt
+cookie-jar.json
+*.cookies.txt
+*.cookies.json
+
+# Local editor/cache files and temporary backups
+.idea/
+.vscode/*.local.json
+*.sublime-workspace
+.cache/
+.tmp/
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+.#*
+\#*\#
