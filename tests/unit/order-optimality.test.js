@@ -82,17 +82,12 @@ test('planner movement is minimal on 200 exhaustively checked small books (integ
         const isNew = random() < 0.3;
         const movingUid = isNew ? null : Math.floor(random() * size);
         const targetIndex = Math.floor(random() * ((isNew ? size : size - 1) + 1));
-        let plan;
-        try {
-            plan = planOrderPlacement(list, { movingUid, targetIndex, range });
-        } catch {
-            continue;
-        }
+        const plan = planOrderPlacement(list, { movingUid, targetIndex, range });
         const assign = new Map(list.map((item) => [item.uid, readOrder(item.order)]));
         for (const change of plan.changes) assign.set(change.uid, change.to);
         const minimum = bruteForceMinimum(list, movingUid, isNew, plan.sequence, range);
         assert.equal(cost(list, movingUid, assign), minimum, JSON.stringify({ list, movingUid, targetIndex, plan }));
         checked++;
     }
-    assert.ok(checked > 150);
+    assert.equal(checked, 200);
 });

@@ -7,7 +7,7 @@ import { cloneDeep, isPlainObject, jsonEqual, toJsonValue } from './json.js';
  * A targeted change to one entry.
  *
  * - Plain object form: `{ content: 'new text' }` sets top-level fields.
- * - Operation list form: `[{ path: ['characterFilter', 'names'], value: ['Alice'] }, { op: 'unset', path: 'automationId' }]`.
+ * - Operation list form: `[{ path: ['characterFilter', 'names'], value: ['Alice'] }, { op: 'unset', path: 'myExtensionField' }]`.
  *   A string path is always one top-level key (dots are not split, so unknown keys containing dots stay addressable).
  *
  * @typedef {Record<string, unknown> | EntryPatchOp[]} EntryPatch

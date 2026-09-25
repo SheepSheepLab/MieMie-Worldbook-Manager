@@ -237,6 +237,22 @@ test('randomized placements keep every invariant', () => {
         for (const change of plan.changes) {
             assert.notEqual(readOrder(change.from), change.to, context);
         }
+        // 6. No new ties among existing entries; entries tied on the same side of the
+        //    insertion point stay tied (a tie the insertion point splits must break).
+        const others = sequence.filter((uid) => uid !== placedUid);
+        const valueBefore = (uid) => readOrder(list.find((i) => i.uid === uid).order);
+        const above = (uid) => sequence.indexOf(uid) < at;
+        for (let i = 0; i < others.length; i++) {
+            for (let j = i + 1; j < others.length; j++) {
+                const [a, b] = [others[i], others[j]];
+                const tiedAfter = orderOf(a) === orderOf(b);
+                if (valueBefore(a) !== valueBefore(b)) {
+                    assert.ok(!tiedAfter, `new tie ${a}/${b}: ${context}`);
+                } else if (above(a) === above(b)) {
+                    assert.ok(tiedAfter, `tie split ${a}/${b}: ${context}`);
+                }
+            }
+        }
     }
 });
 

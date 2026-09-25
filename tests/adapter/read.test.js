@@ -3,9 +3,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { WorldbookErrorCode } from '../../src/index.js';
-import { mainBook } from '../fixtures/worldbooks.js';
+import { createSillyTavernWorldbookAdapter, WorldbookErrorCode } from '../../src/index.js';
+import { mainBook, standardBooks } from '../fixtures/worldbooks.js';
+import { FakeSillyTavern } from '../helpers/fake-sillytavern.js';
 import { byCode, setup } from '../helpers/adapter-setup.js';
+
+const TAVERN_HELPER_READERS = new Set(['getWorldbookNames', 'getGlobalWorldbookNames', 'getCharWorldbookNames', 'getTavernHelperVersion']);
+
+/** Tavern Helper stand-in that records every function the adapter looks up; calling anything else throws. */
+function recordingTavernHelper(readers) {
+    const accessed = [];
+    const th = new Proxy(readers, {
+        get(target, prop) {
+            if (typeof prop !== 'string') return undefined;
+            accessed.push(prop);
+            return prop in target ? target[prop] : () => { throw new Error(`Tavern Helper ${prop} must not be called`); };
+        },
+    });
+    return { th, accessed };
+}
 
 test('[1] lists worldbooks and reads a book exactly as stored, book-level keys included', async () => {
     const { st, adapter } = setup();
@@ -120,11 +136,8 @@ test('[switching] dangling chat binding is reported, not repaired', async () => 
     assert.equal(st.chatMetadata.world_info, 'Deleted Book', 'binding left as is');
 });
 
-test('[switching] group chats list each member\'s books; Tavern Helper is used only for reading', async () => {
-    const th = {
-        getCharWorldbookNames: (who) => ({ primary: null, additional: who === 'Alice.png' ? ['Other Book'] : [] }),
-        replaceWorldbook: () => { throw new Error('must not be called'); },
-    };
+test('[switching] group chats list each member\'s books through read-only slash commands', async () => {
+    const { th, accessed } = recordingTavernHelper({ getCharWorldbookNames: () => ({ primary: null, additional: ['Wrong'] }) });
     const { st, adapter } = setup({ tavernHelper: th });
     st.groupId = 'g1';
     st.characterId = undefined;
@@ -135,6 +148,45 @@ test('[switching] group chats list each member\'s books; Tavern Helper is used o
         { avatar: 'Alice.png', name: 'Alice', primary: 'Main Book', additional: ['Other Book'] },
         { avatar: 'Bob.png', name: 'Bob', primary: null, additional: [] },
     ]);
+    assert.ok(!accessed.includes('getCharWorldbookNames'), 'installed members need no Tavern Helper');
+});
+
+test('[switching] a group member that is not installed is looked up through Tavern Helper only', async () => {
+    const asked = [];
+    const { th, accessed } = recordingTavernHelper({
+        getCharWorldbookNames: (who) => { asked.push(who); return { primary: null, additional: ['Other Book'] }; },
+    });
+    const { st, adapter } = setup({ tavernHelper: th });
+    st.groupId = 'g1';
+    st.characterId = undefined;
+    st.groups = [{ id: 'g1', members: ['Alice.png', 'Ghost.png'] }];
+    const active = await adapter.getActiveWorldbooks();
+    assert.deepEqual(active.groupMembers[1], { avatar: 'Ghost.png', name: null, primary: null, additional: ['Other Book'] });
+    assert.deepEqual(asked, ['Ghost.png']);
+    assert.ok(accessed.every((name) => TAVERN_HELPER_READERS.has(name)), accessed.join());
+});
+
+test('[switching] without getWorldInfoNames and slash commands, names and bindings come from Tavern Helper, which is only read', async () => {
+    const st = new FakeSillyTavern({ books: standardBooks() });
+    const { th, accessed } = recordingTavernHelper({
+        getWorldbookNames: () => st.getContext().getWorldInfoNames(),
+        getGlobalWorldbookNames: () => ['Other Book'],
+        getCharWorldbookNames: (who) => (who === 'current' ? { primary: 'Main Book', additional: ['Chat Book'] } : null),
+    });
+    const adapter = createSillyTavernWorldbookAdapter({
+        getContext: () => ({ ...st.getContext(), getWorldInfoNames: undefined, executeSlashCommandsWithOptions: undefined }),
+        fetch: st.fetch,
+        tavernHelper: th,
+        document: null,
+        settleTimeoutMs: 50,
+    });
+    assert.deepEqual(await adapter.listWorldbooks(), st.getContext().getWorldInfoNames());
+    const active = await adapter.getActiveWorldbooks();
+    assert.deepEqual(active.global, { names: ['Other Book'], source: 'tavern-helper' });
+    assert.deepEqual(active.character, { primary: 'Main Book', additional: ['Chat Book'], source: 'context+tavern-helper' });
+    const created = await adapter.createEntry('Other Book', { fields: { content: 'via fallbacks' } });
+    assert.equal(created.verified, true);
+    assert.ok(accessed.every((name) => TAVERN_HELPER_READERS.has(name)), accessed.join());
 });
 
 test('[14] everything works without DOM, UI or Tavern Helper', async () => {

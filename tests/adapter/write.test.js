@@ -263,3 +263,11 @@ test('after a write, the ST editor is reloaded only when it shows that book', as
     await adapter.updateEntry('Broken Book', 0, { content: 'z' });
     assert.equal(st.calls.reloadEditor.length, 1);
 });
+
+test('without access to the editor DOM, every write asks the ST editor to reload that book', async () => {
+    // Not knowing what the editor shows, skipping the reload could let a stale editor
+    // copy overwrite the write later; reloading only affects what the editor displays.
+    const { st, adapter } = setup({ withDom: false });
+    await adapter.updateEntry('Main Book', 0, { content: 'x' });
+    assert.deepEqual(st.calls.reloadEditor, [{ name: 'Main Book', loadIfNotSelected: false }]);
+});

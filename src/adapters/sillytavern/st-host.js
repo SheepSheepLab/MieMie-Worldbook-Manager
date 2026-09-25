@@ -159,7 +159,8 @@ export function createStHost(options = {}) {
         /**
          * Immediate save through ST (updates ST's page cache and fires WORLDINFO_UPDATED).
          * ST resolves this even when the server rejects the write, so callers must verify.
-         * ST keeps `data` by reference as its cache entry: never mutate it afterwards.
+         * ST keeps `data` by reference as its cache entry: mutate it afterwards only to
+         * undo a failed write.
          * @param {string} name
          * @param {Record<string, any>} data
          */

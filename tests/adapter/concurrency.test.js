@@ -149,14 +149,22 @@ test('a difference that is only SillyTavern editor normalization needs no wait a
     const live = await st.loadWorldInfo('Other Book');
     live.entries[0].role = null;
     live.entries[0].delayUntilRecursion = false;
-    live.entries[1].useProbability = true;
+    live.entries[1].delayUntilRecursion = false;
+    live.entries[1].sticky = 0;
+    const untouchedBefore = JSON.stringify(live.entries[1]);
     const started = Date.now();
     const result = await adapter.updateEntry('Other Book', 0, { content: 'first' });
     assert.ok(Date.now() - started < 200, 'no settle wait');
     assert.equal(result.hostDrift, 'normalized');
-    const stored = st.readFile('Other Book').entries[0];
-    assert.equal(stored.role, null, 'untouched in the file');
-    assert.equal(stored.delayUntilRecursion, 0, 'the file keeps its value; ST\'s in-memory rewrite is not persisted by this write');
+    const file = st.readFile('Other Book');
+    assert.equal(file.entries[0].role, null, 'the patched entry is built on the file');
+    assert.equal(file.entries[0].delayUntilRecursion, 0);
+    assert.equal(file.entries[0].content, 'first');
+    // Untouched entries are saved as ST holds them, so their JSON in ST (which running
+    // sticky/cooldown effects are matched by) does not change.
+    assert.equal(JSON.stringify((await st.loadWorldInfo('Other Book')).entries[1]), untouchedBefore);
+    assert.equal(file.entries[1].delayUntilRecursion, false);
+    assert.equal(file.entries[1].sticky, 0);
 });
 
 test('a lasting substantive difference is waited for once, then remembered', async () => {

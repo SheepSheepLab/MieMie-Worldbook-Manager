@@ -234,6 +234,7 @@ export async function runIntegration({ includeTavernHelper = true, includeEditor
         const slot = [];
         [...valid].sort((a, b) => b.order - a.order).forEach((e) => slot.unshift(e.uid));
         assert(slot.join() === [...display].reverse().join(), 'display is not prompt order reversed');
+        assert(result.orderChanges.length === 1 && result.orderChanges[0].uid === 9, JSON.stringify(result.orderChanges));
         return `order ${result.order}, changed ${result.orderChanges.length} entr${result.orderChanges.length === 1 ? 'y' : 'ies'}`;
     });
 
@@ -374,8 +375,12 @@ export async function runIntegration({ includeTavernHelper = true, includeEditor
             await sleep(800);
             const rewritten = lib.diffPaths(await readDisk(NORM), await ctx().loadWorldInfo(NORM)).map((path) => path.join('.'));
             assert(rewritten.length > 0, 'ST editor did not rewrite anything (drawers not opened?)');
+            const cacheBefore = await ctx().loadWorldInfo(NORM);
+            const expectedUntouched = JSON.stringify([cacheBefore.entries[1], cacheBefore.entries[2]]);
             const result = await adapter.updateEntry(NORM, 0, { content: 'entry 0 edited' });
             assert(result.hostDrift === 'normalized', `hostDrift ${result.hostDrift}`);
+            const cacheAfter = await ctx().loadWorldInfo(NORM);
+            assert(JSON.stringify([cacheAfter.entries[1], cacheAfter.entries[2]]) === expectedUntouched, 'untouched entries changed in ST\'s page copy');
             return `ST rewrote in memory: ${rewritten.join(', ')}`;
         });
 
@@ -402,7 +407,17 @@ export async function runIntegration({ includeTavernHelper = true, includeEditor
     }
 
     await record('B11', 'active worldbooks are read without side effects', async () => {
+        const readSettings = async () => (await hostWindow.fetch('/api/settings/get', { method: 'POST', headers: ctx().getRequestHeaders(), body: '{}' })).json();
+        const settingsBefore = (await readSettings()).settings;
+        const chatBefore11 = JSON.stringify({ chat: ctx().chat, meta: ctx().chatMetadata });
         const active = await adapter.getActiveWorldbooks();
+        assert(active.global.source === 'slash-command' && Array.isArray(active.global.names), `global ${JSON.stringify(active.global)}`);
+        assert(active.character?.source === 'context+slash-command' && active.character.primary === ctx().characters[ctx().characterId].data.extensions.world, `character ${JSON.stringify(active.character)}`);
+        assert(active.chat.source === 'context' && active.persona.source === 'context', 'chat / persona source');
+        assert(active.editor.source === 'dom', `editor ${JSON.stringify(active.editor)}`);
+        await sleep(ST_DEBOUNCE_WAIT);
+        assert((await readSettings()).settings === settingsBefore, 'settings changed');
+        assert(JSON.stringify({ chat: ctx().chat, meta: ctx().chatMetadata }) === chatBefore11, 'chat changed');
         return JSON.stringify({ global: active.global, chat: active.chat, persona: active.persona, editor: active.editor, character: active.character });
     });
 

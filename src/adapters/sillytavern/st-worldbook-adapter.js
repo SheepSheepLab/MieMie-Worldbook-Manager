@@ -330,7 +330,11 @@ export function createSillyTavernWorldbookAdapter(options = {}) {
                     { worldbook: name, entries: drift.entries, bookKeys: drift.bookKeys, storedFingerprint: fingerprint(stored) },
                 );
             }
-            await persist(name, book, /** @type {Map<string, Record<string, any> | null>} */ (plan.expect));
+            const expect = /** @type {Map<string, Record<string, any> | null>} */ (plan.expect);
+            if (drift.kind === 'normalized' && cached) {
+                keepHostRewrites(book, cached, expect);
+            }
+            await persist(name, book, expect);
             meta.hostChangesDiscarded = drift.kind === 'substantive';
             return { ...plan.result, ...meta, written: true, verified: true };
         });
@@ -342,7 +346,7 @@ export function createSillyTavernWorldbookAdapter(options = {}) {
      * `restoreOnFailure` is false), so ST does not keep using a change that was
      * never stored.
      * @param {string} name
-     * @param {Record<string, any>} book Handed to ST; ST keeps it as its cache entry, so it is never touched again.
+     * @param {Record<string, any>} book Handed to ST; ST keeps it as its cache entry, so it is only touched again to undo a failed write.
      * @param {Map<string, Record<string, any> | null>} expect
      * @param {{ restoreOnFailure?: boolean }} [options]
      */
@@ -387,7 +391,7 @@ export function createSillyTavernWorldbookAdapter(options = {}) {
 
         let cacheRestored = false;
         if (restoreOnFailure) {
-            cacheRestored = await restoreHostCopy(name);
+            cacheRestored = await restoreHostCopy(name, book);
         }
         reloadEditorIfShowing(name);
         throw new WorldbookError(
@@ -401,22 +405,26 @@ export function createSillyTavernWorldbookAdapter(options = {}) {
     }
 
     /**
-     * Puts ST's page copy of `name` back to what the file holds after a failed write.
-     * ST offers no way to reset its cache without saving, so the current file content
-     * is saved again (the same content, read right before). A book that is no longer
-     * in the list is left alone, so it is not recreated.
+     * Puts ST's page copy of `name` back to what the file holds after a failed write,
+     * without writing to the server. ST keeps the object passed to saveWorldInfo as
+     * its cache entry (by reference, world-info.js:4183), so that object is
+     * overwritten in place with the file's latest content. If something else has
+     * saved the book since, ST's cache holds that save instead and is left as it is.
+     * A book that is no longer in the list is left alone.
      * @param {string} name
+     * @param {Record<string, any>} saved The object handed to saveWorldInfo.
      * @returns {Promise<boolean>} Whether the page copy now matches the file.
      */
-    async function restoreHostCopy(name) {
+    async function restoreHostCopy(name, saved) {
         try {
             const latest = await host.readStored(name);
             if (isDummyBook(latest)) {
                 await host.refreshNames();
                 if (!host.listNames().includes(name)) return false;
             }
-            await saveAsOwn(name, latest);
-            return true;
+            for (const key of Object.keys(saved)) delete saved[key];
+            Object.assign(saved, cloneDeep(latest));
+            return jsonEqual(await host.readCached(name), latest);
         } catch {
             return false;
         }
@@ -888,6 +896,24 @@ function freeUid(book, cached) {
         if (!used.has(String(uid))) return uid;
     }
     throw new WorldbookError(WorldbookErrorCode.INVALID_ARGUMENT, `No free uid below ${MAX_UID}.`);
+}
+
+/**
+ * When ST's page copy differs from the file only by its editor's own rewrites, the
+ * entries this write does not touch are saved as ST holds them (which is what ST's
+ * next save would store anyway). ST matches running sticky/cooldown effects by the
+ * JSON of the entry in its page copy (world-info.js:4627-4634), so those entries keep
+ * their effects.
+ * @param {Record<string, any>} book
+ * @param {Record<string, any>} cached
+ * @param {Map<string, Record<string, any> | null>} touched
+ */
+function keepHostRewrites(book, cached, touched) {
+    if (!isPlainObject(cached.entries)) return;
+    for (const key of Object.keys(book.entries)) {
+        if (touched.has(key) || !isPlainObject(cached.entries[key])) continue;
+        book.entries[key] = cloneDeep(cached.entries[key]);
+    }
 }
 
 /**

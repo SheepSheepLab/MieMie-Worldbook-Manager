@@ -19,7 +19,31 @@ test('[11] server rejects the save (HTTP 500): ST resolves, the adapter reports 
     });
     assert.equal(st.fileText('Main Book'), before, 'file unchanged');
     const cached = await st.loadWorldInfo('Main Book');
-    assert.notEqual(cached.entries[0].content, 'lost', 'ST page cache no longer claims the unsaved change');
+    assert.deepEqual(cached, st.readFile('Main Book'), 'ST page cache no longer claims the unsaved change');
+    assert.equal(st.calls.edit, 1, 'the page cache is restored without another write to the server');
+});
+
+test('[11] restoring ST\'s page copy never writes the file, so a later write from elsewhere survives', async () => {
+    const { st, adapter } = setup();
+    st.faults.edit.push({ status: 500 });
+    const originalFetch = st.fetch;
+    let reads = 0;
+    const adapterFetch = async (url, init) => {
+        // Another tab saves right after the restore step has read the file.
+        if (url === '/api/worldinfo/get' && st.calls.edit === 1 && ++reads === 2) {
+            const response = await originalFetch(url, init);
+            const other = st.readFile('Other Book');
+            other.entries[1].content = 'Edited on the phone';
+            st.writeFromOtherTab('Other Book', other);
+            return response;
+        }
+        return originalFetch(url, init);
+    };
+    const flaky = createSillyTavernWorldbookAdapter({ getContext: st.getContext, fetch: adapterFetch, tavernHelper: null, document: null, settleTimeoutMs: 50 });
+    await assert.rejects(flaky.updateEntry('Other Book', 0, { content: 'mine' }), byCode(WorldbookErrorCode.WRITE_NOT_CONFIRMED));
+    assert.equal(st.calls.edit, 1);
+    assert.equal(st.readFile('Other Book').entries[1].content, 'Edited on the phone');
+    assert.notEqual(st.readFile('Other Book').entries[0].content, 'mine');
 });
 
 test('[11] server answers 200 but does not store the data: still not reported as success', async () => {
