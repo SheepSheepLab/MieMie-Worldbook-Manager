@@ -8,16 +8,28 @@ MieMie Worldbook Manager is an advanced management frontend for SillyTavern's na
 
 ## 项目状态 / Status
 
-- **Early Development / Initial Repository**：当前仅完成仓库初始化，业务功能尚未开发。
+- **Early Development**：已完成 Phase 1 世界书兼容层（SillyTavern 世界书读写 Adapter），尚无用户界面，暂不能作为扩展直接使用。
 - 初始计划版本 / Initial planned version：**0.1.0**。
 - GitHub Repository：**SheepSheepLab/MieMie-Worldbook-Manager**。
 - Extension ID：**`miemie.worldbook-manager`**。
 
-项目以兼容 SillyTavern 原生 World Info / Lorebook 为设计目标，不创造 MieMie 私有世界书格式。这里说明的是产品定位，并不表示当前已经提供可运行或经过兼容性验证的实现。
+项目以兼容 SillyTavern 原生 World Info / Lorebook 为设计目标，不创造 MieMie 私有世界书格式。目前的兼容层在 SillyTavern 1.19.0 上验证过，其余版本与界面功能尚在开发中。
 
-The project is designed for compatibility with SillyTavern's native World Info / Lorebook. It does not define a proprietary MieMie worldbook format. This initial repository contains no working implementation yet.
+The project is designed for compatibility with SillyTavern's native World Info / Lorebook. It does not define a proprietary MieMie worldbook format. Phase 1 provides the worldbook data layer, verified against SillyTavern 1.19.0; there is no user interface yet.
 
 正式开发需求基线见 [产品与开发企划书 v0.1](docs/PRODUCT_PLAN.md)。参与社区协作前请阅读 [贡献说明](CONTRIBUTING.md)。
+
+## 开发 / Development
+
+- [Worldbook Adapter](docs/worldbook-adapter.md)：世界书数据层的结构、接口与数据安全规则。
+- [SillyTavern 1.19.0 兼容性调研](docs/compatibility/sillytavern-1.19.0.md)：字段、Order 语义、读写接口与已知限制。
+- [测试说明](docs/testing.md)：自动测试与真实 SillyTavern 集成测试。
+
+运行自动测试需要 Node.js 22 或更高版本，无需安装依赖：
+
+```bash
+npm test
+```
 
 ## 授权 / Licensing
 
