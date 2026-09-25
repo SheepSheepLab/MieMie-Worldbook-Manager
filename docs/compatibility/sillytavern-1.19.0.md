@@ -102,10 +102,10 @@
 | 新建 | `createWorldInfoEntry`：最小空闲 uid + 模板，不设 `displayIndex`，不保存 | 同样的模板与 uid 规则；Order 按 MieMie 规则（默认置顶） | world-info.js:4137-4149 | ST 自己新建条目的 Order 固定为 100 |
 | 修改 | ST 编辑器与 `/setentryfield`：修改后保存整本书 | 在文件内容上做定向 Patch，保存整本书，只有目标字段改变 | world-info.js:1343-1447, 3379-3399 | `/setentryfield` 走防抖、只能改已定义字段，并按字符串转换类型，不适合 MieMie 使用 |
 | 删除 | `deleteWorldInfoEntry`：`delete data.entries[uid]`，不保存，不处理 `originalData` | 同样只删除该键 | world-info.js:4043-4073 | ST 编辑器删除时另会调用 `deleteWIOriginalDataValue`，但由于上文的 `id`/`uid` 不匹配，实际上什么也不做 |
-| 失败识别 | ST 不提供任何成功信号 | 回读核对，核对的是交给 ST 之前记下的内容；失败时用文件最新内容恢复 ST 页面缓存 | world-info.js:4151-4161 | — |
+| 失败识别 | ST 不提供任何成功信号 | 回读核对，核对的是交给 ST 之前记下的内容；失败时把交给 ST 的对象原地改回文件最新内容，ST 页面缓存随之恢复，不再写服务器 | world-info.js:4151-4161 | — |
 | 外部修改通知 | `WORLDINFO_UPDATED(name, data)`：仅在本页面 `_save` 完成后发出（失败也发）；`data` 就是交给 `saveWorldInfo` 的那个对象，监听者可以改动它 | `watchWorldbooks()` 转发，按对象识别并过滤掉 Adapter 自己的保存；写入前据此等待同书的防抖保存落盘 | events.js:42；world-info.js:4160 | 看不到其他标签页的写入，也不能说明写入成功；新建、删除、导入书时 ST 不发事件 |
 | ST 编辑器旧副本 | 编辑器闭包持有整本书副本，任何字段修改都会保存整本书，外部写入之后会被覆盖回去 | 写入后若编辑器正显示该书，调用 `reloadWorldInfoEditor` | world-info.js:2310-2311, 1040-1046；实测 B10 | `reloadEditor` 会清空 ST 编辑器的搜索与分页；编辑器没打开书时，它会把第 0 本书打开，所以 Adapter 这时不调用它 |
-| ST 编辑器的自动改写 | 编辑器显示一本书、展开条目时，会在页面缓存里原地改写字段（见下表），下次保存时一并写进文件 | 判断页面副本是否有未落盘改动、判断基线冲突时，这些改写不算差异 | 见下表；实测 B15、B16 | 与自动改写结果完全相同的人工修改无法区分，也按自动改写处理 |
+| ST 编辑器的自动改写 | 编辑器显示一本书、展开条目时，会在页面缓存里原地改写字段（见下表），下次保存时一并写进文件 | 判断页面副本是否有未落盘改动、判断基线冲突时，这些改写不算差异；页面副本只差这些改写时，写入中未涉及的条目按页面副本保存 | 见下表；实测 B15、B16 | 与自动改写结果完全相同的人工修改无法区分，也按自动改写处理 |
 | 页面副本与文件不一致 | 页面缓存可能含有未落盘或保存失败的改动；文件也可能被其他标签页改过。ST 下次保存会整本覆盖 | 有实质差异时拒绝写入（`HOST_UNSAVED_CHANGES`），由调用方选择以文件为准（`onHostDrift: 'use-stored'`）或保留 ST 的版本（`saveHostCopy`） | 实测 A1、B8、B17 | 见第 5 节 |
 
 ST 1.19.0 编辑器的自动改写（`st-schema.js` 的 `isHostNormalization` 按此判断）：
@@ -132,7 +132,7 @@ ST 1.19.0 编辑器的自动改写（`st-schema.js` 的 `isHostNormalization` �
 | ST 的重编号 | 只有用户手动点的 "Apply Current Sorting" 会整本重编号（1.19.0 起可设起点与步长）；ST 编辑器拖拽只改 `displayIndex` | world-info.js:2496-2618, 2656-2682 |
 | 修改的副作用 | 进行中的 sticky/cooldown 记录在 `chat_metadata.timedWorldInfo` 中，按整条条目 JSON 的哈希匹配。修改一个条目的**任何**字段（包括 Order），它进行中的效果都会失配 | world-info.js:593-611, 4627-4634 |
 
-对应的 MieMie 规则（详见 [Adapter 文档](../worldbook-adapter.md#order-规则)）：非常规值按 ST 编辑器的解释读取（缺失为 100，`null`、空串与非数字值为 0），书在 ST 编辑器中打开并保存一次后也正是这些值；显示时 Order 大者在上，与 ST 的 "Order ↘" 一致；移动时只改插入点附近连续的一段，被移动条目与邻居严格不相等，不制造新的并列；Adapter 分配的新值是整数，默认取 0–9999，书中已有超出这个范围的值时向外放宽一格；未改动条目的原值与 JSON 保持不变，因此它们进行中的 sticky/cooldown 不受影响。
+对应的 MieMie 规则（详见 [Adapter 文档](../worldbook-adapter.md#order-规则)）：非常规值按 ST 编辑器的解释读取（缺失为 100，`null`、空串与非数字值为 0），书在 ST 编辑器中打开并保存一次后也正是这些值；显示时 Order 大者在上，与 ST 的 "Order ↘" 一致；移动时只改插入点附近连续的一段，被移动条目与邻居严格不相等，不制造新的并列；Adapter 分配的新值是整数，默认取 0–9999，书中已有超出这个范围的值时向外放宽一格；未改动条目的原值保持不变，它们在 ST 页面中的 JSON 也保持不变（页面副本只差自动改写时沿用页面副本），因此进行中的 sticky/cooldown 不受影响；以文件为准丢弃页面差异（`onHostDrift: 'use-stored'`）时除外。
 
 ### 3.6 Tavern Helper 4.11.0 接口
 
@@ -142,7 +142,7 @@ Tavern Helper 在主窗口挂载 `window.TavernHelper`，脚本 iframe 中的同
 | --- | --- | --- | --- |
 | `getWorldbookNames` | `world_names` 的副本 | TH:src/function/worldbook.ts:23-25 | 列表的回退来源 |
 | `getGlobalWorldbookNames` | 读 `world_info.globalSelect`（可能滞后约 1 秒） | worldbook.ts:27-29 | 全局书的回退来源 |
-| `getCharWorldbookNames` | 只读 | worldbook.ts:50-52；lorebook.ts:46-84 | 附加书、群聊成员的来源 |
+| `getCharWorldbookNames` | 只读 | worldbook.ts:50-52；lorebook.ts:219-243 | 附加书、群聊成员的来源 |
 | `getTavernHelperVersion` | 返回 manifest 版本 | TH:src/function/version.ts:5-15 | 诊断 |
 | `getWorldbook` | 经 `toWorldbookEntry` 转换后的视图（按 `displayIndex` 排序），不是原始对象；遇到缺 `keysecondary` 的条目直接抛错 | worldbook.ts:205-261, 356-365；实测 A6 | **不使用** |
 | `createOrReplaceWorldbook` / `replaceWorldbook` / `updateWorldbookWith` / `createWorldbookEntries` / `deleteWorldbookEntries` | 都经 `fromWorldbookEntry` 从头重建**每一个**条目，只保存 `{ entries }`，走 ST 防抖保存 | worldbook.ts:262-324, 377-473；实测 A7 | **不使用**（有损） |
@@ -188,7 +188,7 @@ A7 的实测结果（对含未知字段的测试书执行一次 `updateWorldbook
 | §7 "只有不存在安全排序方案时才做整体重排" | 只要插入点上方或下方到取值范围边界之间还有空着的整数，就有局部方案 | 从不整本重排；两侧都没有空位时返回 `ORDER_SPACE_EXHAUSTED` | 否 |
 | §9 拖动后"更新真正的 SillyTavern World Info Order" | ST 编辑器自己的拖拽只改 `displayIndex` | 按计划书改 `order`，不改 `displayIndex` | 否；ST 编辑器的 "Custom" 视图因此与 MieMie 顺序无关 |
 | §44 "打开编辑时记录原始版本，保存前重新读取" | ST 的 `loadWorldInfo` 缓存看不到其他标签页；ST 编辑器会在内存里改写字段 | 每次写入都重新读取服务器文件；同书防抖保存先等待落盘；冲突检测默认按整条比较，ST 编辑器的自动改写不算冲突；ST 页面副本与文件有实质差异时拒绝写入，由用户选择保留哪一边 | 否 |
-| §49 "写入后确认保存结果" | ST 不提供成功信号 | 回读核对，失败时恢复 ST 缓存 | 否 |
+| §49 "写入后确认保存结果" | ST 不提供成功信号 | 回读核对，失败时恢复 ST 页面缓存（不再写服务器） | 否 |
 
 ## 5. 已知限制
 
@@ -202,8 +202,9 @@ A7 的实测结果（对含未知字段的测试书执行一次 `updateWorldbook
   - 以文件为准（`onHostDrift: 'use-stored'`）会丢掉 ST 页面里的差异；保留 ST 的版本（`saveHostCopy`）会覆盖文件里独有的内容。
   - 差异持续存在时，对这本书的第一次写入会先等满 `settleTimeoutMs`（默认 1.5 秒），同样的差异之后不再重复等待。
 - **自动改写清单以 1.19.0 为准**：其他版本的 ST 编辑器若新增了改写，这些改写会被当作实质差异或冲突，结果是写入被拒绝，不会覆盖数据。
-- **修改会中断进行中的 sticky/cooldown**：这是 ST 按条目哈希匹配的固有行为，ST 编辑器也一样。Adapter 不改动的条目 JSON 保持不变，不受影响。
-- **ST 编辑器的状态**：写入后刷新 ST 编辑器，会重置它的搜索与分页。
+- **修改会中断进行中的 sticky/cooldown**：这是 ST 按条目哈希匹配的固有行为，ST 编辑器也一样。Adapter 不改动的条目在 ST 页面中的 JSON 保持不变，不受影响；以文件为准丢弃页面差异时，有差异的条目例外。
+- **ST 编辑器的状态**：写入后刷新 ST 编辑器，会重置它的搜索与分页。无法读取编辑器状态时（没有 DOM）每次写入都会刷新；这时如果编辑器没打开任何书、而写入的书排在列表第一位，ST 会把它打开。
+- **文件会被重新格式化**：保存的是 JSON 解析后的值。由其他工具写入或导入的文件，第一次保存时缩进、数字写法（`1.50` → `1.5`）与整数形式键的顺序会变化，超过 2^53 的整数会损失精度。ST 编辑器保存时也是如此。
 - **未验证的运行环境**：
   - 只验证了 SillyTavern 1.19.0；1.18.x 理论上可用（依赖 `getWorldInfoNames`），未实测。
   - 移动端未实测。

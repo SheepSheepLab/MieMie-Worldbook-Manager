@@ -52,9 +52,11 @@ npm test
 
 `tests/adapter/robustness.test.js` 覆盖更少见的情况：同一页面内两个 Adapter 实例共用锁、Adapter 保存期间同一本书被别的代码保存、`WORLDINFO_UPDATED` 监听者改动保存对象、`saveHostCopy` 遇到已删除的书或文件又被改过、Proxy 与循环引用的值、uid 被新条目复用、`options` 传 `null` 或非法取值、等待 ST 编辑器那本书期间目标书被写入。这些测试都做过反向验证：把对应的处理临时去掉，测试会失败。
 
+Tavern Helper 的回退路径（没有 `getWorldInfoNames` 与斜杠命令时的书名列表、全局书、角色附加书，以及未安装的群聊成员）在 `read.test.js`，同时确认 Adapter 只调用 Tavern Helper 的只读函数。
+
 ### 结果
 
-2026-09-25，Node.js 24.15.0，Windows 11：`npm test` 共 130 项，全部通过。
+2026-09-25，Node.js 24.15.0，Windows 11：`npm test` 共 134 项，全部通过。
 
 ## 真实 SillyTavern 集成测试
 
@@ -115,9 +117,9 @@ npm test
 | B9 | 基线之后同一字段被改：返回 `CONFLICT`，不覆盖 | 通过 |
 | B17 | `saveHostCopy`：文件在报告差异之后又被改过时返回 `CONFLICT` 且不写入；指纹匹配时把 ST 页面副本存为文件，回读核对通过，ST 缓存与文件一致 | 通过 |
 | B10 | ST 世界书编辑器打开同一本书时，Adapter 写入后编辑器再次保存，不会覆盖 Adapter 的修改 | 通过 |
-| B15 | 真实 ST 编辑器显示一本书并展开条目后，页面缓存里的改写（本次观察到 51 处，涉及模板补齐、`role`、`delayUntilRecursion`、`sticky` 等）全部识别为自动改写，写入结果 `hostDrift` 为 `'normalized'`，不报 `HOST_UNSAVED_CHANGES` | 通过 |
+| B15 | 真实 ST 编辑器显示一本书并展开条目后，页面缓存里的改写（本次观察到 51 处，涉及模板补齐、`role`、`delayUntilRecursion`、`sticky` 等）全部识别为自动改写，写入结果 `hostDrift` 为 `'normalized'`，不报 `HOST_UNSAVED_CHANGES`；写入后未涉及条目在 ST 页面中的 JSON 不变 | 通过 |
 | B16 | 真实 ST 编辑器把这些改写保存进文件后，带旧基线的 `updateEntry` 不报 `CONFLICT` | 通过 |
-| B11 | `getActiveWorldbooks` 通过斜杠命令、context 与 DOM 读取，无副作用 | 通过 |
+| B11 | `getActiveWorldbooks` 的全局书、角色书来自斜杠命令，聊天与人设来自 context，编辑器来自 DOM；调用前后 ST 设置与聊天不变 | 通过 |
 | B12 | 不存在的书：`WORLDBOOK_NOT_FOUND`，不会新建文件 | 通过 |
 | B13 | `watchWorldbooks` 只报告页面内其他代码的保存 | 通过 |
 | B14 | 聊天与聊天元数据不变，其他世界书列表不变 | 通过 |
