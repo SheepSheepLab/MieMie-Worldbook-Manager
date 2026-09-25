@@ -1,0 +1,14 @@
+{
+  "name": "miemie-worldbook-manager",
+  "private": true,
+  "description": "Advanced manager for SillyTavern World Info / Lorebook",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"tests/unit/*.test.js\" \"tests/adapter/*.test.js\""
+  }
+}
